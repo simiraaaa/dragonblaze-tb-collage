@@ -22,7 +22,7 @@ phina.define('FixedShuu', {
       c.beginPath();
       var rad = i * addRad + startRad;
       var strokeWidth = Math.randfloat(minWidth, maxWidth);
-      var padRad = Math.atan((strokeWidth / 2) / length);
+      var padRad = Math.atan2(strokeWidth / 2, length);
       var sin1 = Math.sin(rad + padRad);
       var sin2 = Math.sin(rad - padRad);
       var cos1 = Math.cos(rad + padRad);
@@ -63,7 +63,7 @@ phina.define('MoveShuu', {
       c.beginPath();
       var rad = i * addRad + startRad;
       var strokeWidth = Math.randfloat(minWidth, maxWidth);
-      var padRad = Math.atan((strokeWidth / 2) / length);
+      var padRad = Math.atan2(strokeWidth / 2, length);
       var sin1 = Math.sin(rad + padRad);
       var sin2 = Math.sin(rad - padRad);
       var cos1 = Math.cos(rad + padRad);

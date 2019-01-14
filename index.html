@@ -1,0 +1,314 @@
+<!doctype html>
+ 
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <title>ドラゴンブレイズ テクニカルボーナスコラジェネレーター</title>
+    <meta name="description" content="ドラゴンブレイズ" />
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/riot/3.13.2/riot+compiler.min.js" type="text/javascript" charset="utf-8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phina.js@0.2.3/build/phina.js" type="text/javascript" charset="utf-8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/blueimp-load-image@2.20.1/js/load-image.all.min.js" type="text/javascript" charset="utf-8"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/meltline@0.1.9/meltline.min.css" type="text/css" media="all" />
+  </head>
+  <body>
+    <app></app>
+    <script type="riot/tag" charset="utf-8">
+      <app>
+        <input ref="file" type="file" accept="image/*" class="hide"/>
+        <div class="absolute s-full t0 l0 overflow-hidden">
+          <div class="s-full f flex-column">
+            <div class="h0 w-full flex-auto relative"><canvas ref="canvas" width="{WIDTH}" height="{HEIGHT}"></canvas></div>
+            <div ref="ui" tabindex="-1" class="fs12 flex-fixed h100 w-full border-top bg-white relative z1 p12">
+              <div class="container">
+                <div if={mode === "normal"}>
+                  <p>
+                    画像をドロップか貼り付けか
+                    <span class="bg-gray text-white rounded-100 cursor-pointer px10 py3" onclick='{clickFile}'>選択</span>
+                  </p>
+                  <p class="mb3">クリックで集中線を追加。右クリックで保存、もしくは保存ボタン</p>
+                  <button class="button cursor-pointer px10 py3 fs12 bg-purple text-white" onclick="{clearShuu}">集中線クリア</button>
+                  <button class="button cursor-pointer px10 py3 fs12 bg-navy text-white" onclick="{saveImage}">画像を保存</button>
+                  <button class="button cursor-pointer px10 py3 fs12 bg-darkred text-white" onclick="{changePos}">位置調整</button>
+                </div>
+                
+                <div if={mode==="pos"}>
+                  <button class="button cursor-pointer px10 py3 fs12 bg-gray text-white" onclick="{resetPos}">初期化</button>
+                  <button class="button cursor-pointer px10 py3 fs12 bg-navy text-white" onclick="{toNormal}">決定</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <style>
+          .container {
+            width: 100%;
+            max-width: 960px;
+            margin: 0 auto;
+          }
+        </style>
+        var self = this;
+        this.mode = 'normal';
+        var WIDTH = this.WIDTH = 1280;
+        var HEIGHT = this.HEIGHT = 1920;
+        var CENTER_X = WIDTH/2;
+        var CENTER_Y = HEIGHT/2;
+        var WATER = 'rgb(148, 229, 228)';
+        var PURPLE = 'rgb(229, 89, 247)';
+        
+        this.on('mount', () => {
+          var canvas = this.refs.canvas;
+          this.init();
+          this.update();
+          this.fitScreen()
+          phina.main(() => {
+            phina.define('MainScene', {
+              superClass: 'DisplayScene',
+              
+              init: function(opts) {
+                this.superInit(opts);
+                this.bgLayer = DisplayElement().addChildTo(this);
+                this.bg = DisplayElement().addChildTo(this.bgLayer);
+                this.fixedShuu = FixedShuu({
+                  width: WIDTH,
+                  height: HEIGHT,
+                }).addChildTo(this).setOrigin(0, 0);
+                
+                self.on('addImage', (canvas) => {
+                  this.bg.remove();
+                  this.bg = Sprite({
+                    domElement: canvas,
+                    width: canvas.width,
+                    height: canvas.height,
+                  }).addChildTo(this.bgLayer);
+                  var rate = canvas.height/canvas.width;
+                  var wr = this.bg.width / WIDTH;
+                  var hr = this.bg.height / HEIGHT;
+                  if (wr > hr) {
+                    this.bg.width = WIDTH;
+                    this.bg.height = WIDTH * rate;
+                  }
+                  else {
+                    this.bg.width = HEIGHT / rate;
+                    this.bg.height = HEIGHT;
+                  }
+                  this.bg.position.set(CENTER_X, CENTER_Y);
+                });
+                self.on('resetPos', () => {
+                  this.resetPos();
+                });
+                self.on('clearShuu', () => {
+                  this.clearShuu();
+                });
+                this.moveShuu = MoveShuu({
+                  width: WIDTH,
+                  height: HEIGHT,
+                }).addChildTo(this).setOrigin(0, 0);
+
+                this.tech = Sprite('tech').addChildTo(this);
+                var tw = WIDTH * 0.65;
+                var th = this.tech.height * (tw / this.tech.width);
+                this.tech.setSize(tw, th);
+                this.resetPos();
+              },
+              resetPos: function() {
+                this.tech.setPosition(CENTER_X, HEIGHT * 0.4);
+              },
+              onpointmove: function(e) {
+                if (self.mode === "pos") {
+                  this.tech.position.set(e.pointer.x, e.pointer.y);
+                  return ;
+                }
+              },
+              
+              onpointstart: function(e) {
+                if (self.mode === "pos") {
+                  this.tech.position.set(e.pointer.x, e.pointer.y);
+                  return ;
+                }
+                var o = {
+                  centerPosition: e.pointer,
+                  startDegree: Math.random() * 360,
+                  startColor: WATER,
+                  endColor: PURPLE,
+                  minWidth: 30,
+                  maxWidth: 100,
+                };
+                this.fixedShuu.renderShuu(o);
+                o.maxWidth *= 5;
+                o.minWidth *= 5;
+                this.moveShuu.renderShuu(o);
+              },
+              
+              clearShuu: function() {
+                this.fixedShuu.canvas.clear();
+                this.moveShuu.canvas.clear();
+              },
+            });
+              
+            var app = this.app = GameApp({
+              startLabel: 'main',
+              backgroundColor:'#335',
+              width: WIDTH,
+              height: HEIGHT,
+              assets: {
+                image: {
+                  tech: 'images/tech.png',
+                },
+              },
+              domElement: canvas,
+              fit: false,
+              fps: 60,
+            });
+            
+            app.run();
+          });
+          
+        });
+        
+        this.addImage = (c) => {
+          this.trigger('addImage', c)
+        };
+        
+        this.fitScreen = function(isEver) {
+          isEver = isEver === undefined ? true : isEver;
+    
+          var _fitFunc = function() {
+            var e = this.refs.canvas;
+            var s = e.style;
+            var p = e.parentNode;
+            var pr = p.getBoundingClientRect();
+            s.position = "absolute";
+            s.margin = "0 auto";
+            s.left = "0px";
+            s.top  = "0px";
+            s.right = "0px";
+            var rateWidth = e.width/pr.width;
+            var rateHeight= e.height/pr.height;
+            var rate = e.height/e.width;
+            
+            if (rateWidth > rateHeight) {
+              s.width  = Math.floor(pr.width)+"px";
+              s.height = Math.floor(pr.width*rate)+"px";
+            }
+            else {
+              s.width  = Math.floor(pr.height/rate)+"px";
+              s.height = Math.floor(pr.height)+"px";
+            }
+          }.bind(this);
+          
+          // 一度実行しておく
+          _fitFunc();
+    
+          // リサイズ時のリスナとして登録しておく
+          if (isEver) {
+            phina.global.addEventListener("resize", _fitFunc, false);
+          }
+        };
+        
+        this.clickFile = () => {
+          this.refs.file.click();
+        };
+        
+        this.init = () => {
+          var file = this.refs.file;
+          var paste = this.refs.ui;
+          var drop = document.body;
+          
+          function stopEvent(e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          
+          function readAsDataURL(file) {
+            return new Promise(function(resolve) {
+              var fr = new FileReader();
+              fr.onload = function(e){
+                resolve(fr.result);
+              };
+              fr.readAsDataURL(file);
+            });
+          }
+          
+          
+          drop.addEventListener('dragenter', stopEvent, true);
+          drop.addEventListener('dragover', stopEvent, true);
+          
+          
+          paste.addEventListener('input', stopEvent);
+          paste.addEventListener('keypress', stopEvent);
+          
+          paste.addEventListener('paste', function(e){
+            stopEvent(e);
+            var items = [].slice.call(e.clipboardData.items, 0);
+            items.forEach(function(item){
+              if(item.kind === 'string'){
+                return ;
+              }
+              _loadImage(item.getAsFile());
+            });
+          });
+          
+          drop.addEventListener('drop', function(e){
+            stopEvent(e);
+            _loadImage(e.dataTransfer.files[0]);
+          }, true);
+          
+          file.onchange = function(e) {
+            _loadImage(this.files[0]);
+          };
+          
+                  
+          function _loadImage(file) {
+            // canvas: true にすると canvas に画像を描画する(回転させる場合は必須オプション)
+            var options = {canvas: true};
+        
+            loadImage.parseMetaData(file, function (data) {
+              if (data.exif) {
+        
+                // options の orientation は小文字。 exif.getの 'Orientation' は先頭大文字
+                // ここでcanvasの回転を指定している
+                options.orientation = data.exif.get('Orientation');
+              }
+              // 画像の読み込み。完了時に callback が呼び出される
+              loadImage(file, (c)=>{self.addImage(c);}, options);
+            });
+          }
+        };
+        
+        this.clearShuu = () => {
+          this.trigger('clearShuu');
+        };
+        
+        this.saveImage = () => {
+          var url = this.app.domElement.toDataURL('image/jpeg');
+          var a = document.createElement('a');
+          a.download = 'ドラブレテクニカルボーナスコラ.jpeg';
+          a.href=url;
+          a.target = '_blank';
+          a.click();
+        };
+        
+        this.changePos = () => {
+          this.mode = 'pos';
+        };
+        
+        this.toNormal= () => {
+          this.mode = "normal";
+        };
+        
+        this.resetPos = () => {
+          self.trigger('resetPos');
+        };
+      </app>
+    </script>
+    <script src="main.js"></script>
+    <script type="text/javascript" charset="utf-8">
+      riot.mount('*');
+    </script>
+  </body>
+</html>
+
